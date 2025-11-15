@@ -12,6 +12,27 @@
             color: white; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
         #container { width: 100vw; height: 100vh; display: block; }
+        #projections {
+            position: absolute; bottom: 20px; right: 20px;
+            display: flex; flex-direction: column; gap: 15px; z-index: 10;
+        }
+        .projection-view {
+            width: 200px; height: 150px;
+            background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(15px);
+            border: 1px solid rgba(100, 150, 255, 0.3);
+            border-radius: 10px; overflow: hidden;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+        }
+        .projection-view canvas { width: 100%; height: 100%; display: block; }
+        .projection-label {
+            position: absolute; top: 5px; left: 8px;
+            font-size: 11px; color: #88ccff; font-weight: 600;
+            text-shadow: 0 0 8px rgba(0, 0, 0, 0.8);
+            pointer-events: none; z-index: 1;
+        }
+        @media (max-width: 768px) {
+            #projections { display: none; }
+        }
         #info {
             position: absolute; top: 20px; left: 20px;
             background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(15px);
@@ -40,6 +61,22 @@
 </head>
 <body>
     <div id="container"></div>
+    
+    <div id="projections">
+        <div class="projection-view">
+            <div class="projection-label">Side View (XY)</div>
+            <canvas id="sideCanvas"></canvas>
+        </div>
+        <div class="projection-view">
+            <div class="projection-label">End View (YZ)</div>
+            <canvas id="endCanvas"></canvas>
+        </div>
+        <div class="projection-view">
+            <div class="projection-label">Top View (XZ)</div>
+            <canvas id="topCanvas"></canvas>
+        </div>
+    </div>
+    
     <div id="info">
         <code>Ψ(x,t) = A·exp[-(x-vt)²/4σ²]·exp[i(kx-ωt)]</code>
         <div class="label">
@@ -63,6 +100,7 @@
         const { EffectComposer, RenderPass, UnrealBloomPass } = THREE;
         let scene, camera, renderer, controls, composer, clock;
         let waveLine, lineGeometry, gridMesh, gridGeometry;
+        let sideCtx, endCtx, topCtx;
 
         const N_POINTS = 1500;
         const X_MIN = -40, X_MAX = 40, X_RANGE = X_MAX - X_MIN;
@@ -85,6 +123,22 @@
 
         function init() {
             clock = new THREE.Clock();
+            
+            // Setup 2D projection canvases
+            const sideCanvas = document.getElementById('sideCanvas');
+            const endCanvas = document.getElementById('endCanvas');
+            const topCanvas = document.getElementById('topCanvas');
+            
+            sideCanvas.width = 400;
+            sideCanvas.height = 300;
+            endCanvas.width = 400;
+            endCanvas.height = 300;
+            topCanvas.width = 400;
+            topCanvas.height = 300;
+            
+            sideCtx = sideCanvas.getContext('2d');
+            endCtx = endCanvas.getContext('2d');
+            topCtx = topCanvas.getContext('2d');
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x000000);
             scene.fog = new THREE.FogExp2(0x000000, 0.01);
@@ -241,12 +295,145 @@
             composer.setSize(window.innerWidth, window.innerHeight);
         }
 
+        function draw2DProjections() {
+            const posArray = wavePositions;
+            const colorArray = waveColors;
+            
+            // Clear canvases
+            sideCtx.fillStyle = '#000';
+            sideCtx.fillRect(0, 0, 400, 300);
+            endCtx.fillStyle = '#000';
+            endCtx.fillRect(0, 0, 400, 300);
+            topCtx.fillStyle = '#000';
+            topCtx.fillRect(0, 0, 400, 300);
+            
+            // Draw grid lines
+            const drawGrid = (ctx) => {
+                ctx.strokeStyle = 'rgba(100, 150, 255, 0.15)';
+                ctx.lineWidth = 1;
+                for (let i = 0; i <= 10; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(i * 40, 0);
+                    ctx.lineTo(i * 40, 300);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(0, i * 30);
+                    ctx.lineTo(400, i * 30);
+                    ctx.stroke();
+                }
+            };
+            drawGrid(sideCtx);
+            drawGrid(endCtx);
+            drawGrid(topCtx);
+            
+            // Draw center lines
+            const drawCenterLines = (ctx) => {
+                ctx.strokeStyle = 'rgba(100, 150, 255, 0.3)';
+                ctx.lineWidth = 1.5;
+                ctx.beginPath();
+                ctx.moveTo(0, 150);
+                ctx.lineTo(400, 150);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(200, 0);
+                ctx.lineTo(200, 300);
+                ctx.stroke();
+            };
+            drawCenterLines(sideCtx);
+            drawCenterLines(endCtx);
+            drawCenterLines(topCtx);
+            
+            // Scale factors for visualization
+            const xScale = 400 / X_RANGE;
+            const yScale = 60;
+            const zScale = 60;
+            
+            // Side view (XY) - shows oscillating wave with Gaussian envelope
+            sideCtx.beginPath();
+            for (let i = 0; i < N_POINTS; i++) {
+                const idx = i * 3;
+                const x = posArray[idx];
+                const y = posArray[idx + 1];
+                
+                const screenX = ((x - X_MIN) / X_RANGE) * 400;
+                const screenY = 150 - y * yScale;
+                
+                if (i === 0) sideCtx.moveTo(screenX, screenY);
+                else sideCtx.lineTo(screenX, screenY);
+                
+                const r = colorArray[idx];
+                const g = colorArray[idx + 1];
+                const b = colorArray[idx + 2];
+                sideCtx.strokeStyle = `rgb(${r*255}, ${g*255}, ${b*255})`;
+            }
+            sideCtx.lineWidth = 2;
+            sideCtx.stroke();
+            
+            // End view (YZ) - shows circular/coroidal pattern
+            endCtx.beginPath();
+            for (let i = 0; i < N_POINTS; i++) {
+                const idx = i * 3;
+                const y = posArray[idx + 1];
+                const z = posArray[idx + 2];
+                
+                const screenX = 200 + z * zScale;
+                const screenY = 150 - y * yScale;
+                
+                if (i === 0) endCtx.moveTo(screenX, screenY);
+                else endCtx.lineTo(screenX, screenY);
+            }
+            endCtx.strokeStyle = '#88ccff';
+            endCtx.lineWidth = 2;
+            endCtx.stroke();
+            
+            // Draw points to show the circular pattern better
+            for (let i = 0; i < N_POINTS; i += 20) {
+                const idx = i * 3;
+                const y = posArray[idx + 1];
+                const z = posArray[idx + 2];
+                
+                const screenX = 200 + z * zScale;
+                const screenY = 150 - y * yScale;
+                
+                const r = colorArray[idx];
+                const g = colorArray[idx + 1];
+                const b = colorArray[idx + 2];
+                
+                endCtx.fillStyle = `rgb(${r*255}, ${g*255}, ${b*255})`;
+                endCtx.beginPath();
+                endCtx.arc(screenX, screenY, 3, 0, Math.PI * 2);
+                endCtx.fill();
+            }
+            
+            // Top view (XZ) - shows another oscillating wave
+            topCtx.beginPath();
+            for (let i = 0; i < N_POINTS; i++) {
+                const idx = i * 3;
+                const x = posArray[idx];
+                const z = posArray[idx + 2];
+                
+                const screenX = ((x - X_MIN) / X_RANGE) * 400;
+                const screenY = 150 - z * zScale;
+                
+                if (i === 0) topCtx.moveTo(screenX, screenY);
+                else topCtx.lineTo(screenX, screenY);
+                
+                const r = colorArray[idx];
+                const g = colorArray[idx + 1];
+                const b = colorArray[idx + 2];
+                topCtx.strokeStyle = `rgb(${r*255}, ${g*255}, ${b*255})`;
+            }
+            topCtx.lineWidth = 2;
+            topCtx.stroke();
+        }
+
         function animate() {
             requestAnimationFrame(animate);
             // NO TIME CAP - infinite smooth loop
             const elapsedTime = clock.getElapsedTime() * TIME_SCALE;
             updateWavePacket(elapsedTime);
             updateGrid(elapsedTime);
+            draw2DProjections();
             controls.update();
             composer.render();
         }
