@@ -450,6 +450,10 @@
             const posArray = wavePositions;
             const colorArray = waveColors;
             
+            // Calculate these once for reuse
+            const current_a = WIDTH_BASE + smoothCycle(elapsedTime, WIDTH_CYCLE_PERIOD, WIDTH_CYCLE_AMOUNT);
+            const effective_center_x = getEffectiveCenter(elapsedTime);
+            
             // Clear canvases
             sideCtx.fillStyle = '#000';
             sideCtx.fillRect(0, 0, 400, 300);
@@ -763,7 +767,6 @@
             drawCenterLines(momentumCtx);
             
             // Approximate momentum space: wider in momentum when narrow in position
-            const current_a = WIDTH_BASE + smoothCycle(elapsedTime, WIDTH_CYCLE_PERIOD, WIDTH_CYCLE_AMOUNT);
             const momentum_width = 1.0 / current_a; // Uncertainty principle
             const k_center = WAVENUMBER;
             
@@ -810,7 +813,6 @@
             drawGrid(spacetimeCtx);
             
             // Store current wave state in history
-            const effective_center_x = getEffectiveCenter(elapsedTime);
             spacetimeHistory.push({
                 time: elapsedTime,
                 center: effective_center_x,
@@ -870,9 +872,6 @@
             wignerCtx.fillRect(0, 0, 400, 300);
             drawGrid(wignerCtx);
             drawCenterLines(wignerCtx);
-            
-            const current_a = WIDTH_BASE + smoothCycle(elapsedTime, WIDTH_CYCLE_PERIOD, WIDTH_CYCLE_AMOUNT);
-            const effective_center_x = getEffectiveCenter(elapsedTime);
             
             // Simplified Wigner function visualization
             for (let px = 0; px < 400; px += 4) {
