@@ -3,276 +3,250 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Warping Gaussian Wave Packet</title> {/* Updated Title */}
+    <title>Gaussian Wave Packet</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #000; color: white; font-family: sans-serif; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            margin: 0; overflow: hidden;
+            background: linear-gradient(135deg, #000000 0%, #0a0a1e 50%, #000000 100%);
+            color: white; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
         #container { width: 100vw; height: 100vh; display: block; }
         #info {
-            position: absolute; top: 10px; left: 10px;
-            background-color: rgba(0,0,0,0.7); padding: 15px; border-radius: 5px;
-            font-size: 14px; line-height: 1.4; z-index: 10; max-width: 450px;
+            position: absolute; top: 20px; left: 20px;
+            background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(15px);
+            padding: 20px; border-radius: 12px;
+            font-size: 14px; line-height: 1.6; z-index: 10; max-width: 480px;
+            border: 1px solid rgba(100, 150, 255, 0.3);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
         }
-        #info code { font-family: monospace; font-size: 1.1em; color: #f0f0f0; }
-        #info .formula-line { margin-bottom: 10px; }
-        #info .label { color: #aaa; font-size: 0.9em;}
-        #info sup, #info sub { line-height: 0; }
+        #info code {
+            font-family: 'Courier New', monospace; font-size: 15px;
+            color: #88ccff; display: block;
+            background: rgba(0, 100, 200, 0.1); padding: 12px;
+            border-radius: 8px; margin-bottom: 12px;
+            border-left: 3px solid #4488ff;
+        }
+        #info .label { color: #aabbcc; font-size: 13px; margin-bottom: 8px; }
+        #info .controls {
+            color: #6688aa; font-size: 11px; margin-top: 12px;
+            padding-top: 12px; border-top: 1px solid rgba(100, 150, 255, 0.2);
+        }
+        @media (max-width: 768px) {
+            #info { font-size: 12px; padding: 16px; max-width: calc(100vw - 40px); }
+            #info code { font-size: 13px; }
+        }
     </style>
 </head>
 <body>
     <div id="container"></div>
     <div id="info">
-        <div class="formula-line">
-            <code>Ψ(x, t) = A(t) * e<sup>-(x-x₀(t))² / 4a(t)²</sup> * e<sup>i(kx - ω(t)t)</sup></code>
-        </div>
+        <code>Ψ(x,t) = A·exp[-(x-vt)²/4σ²]·exp[i(kx-ωt)]</code>
         <div class="label">
-            Warping Gaussian Wave Packet (Periodic)<br> {/* Updated Label */}
-            Drag to rotate | Scroll to zoom | Right-drag to pan
+            Gaussian wave packet with space-time warping visualization.
+            The 3D helix shows real and imaginary components while the grid warps with the probability density.
         </div>
+        <div class="controls">🖱️ Drag to rotate • Scroll to zoom • Right-drag to pan</div>
     </div>
 
-    <!-- Scripts -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/LuminosityHighPassShader.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/Pass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
 
     <script>
-        const { EffectComposer } = THREE;
-        const { RenderPass } = THREE;
-        const { UnrealBloomPass } = THREE;
-
-        let scene, camera, renderer, controls, composer;
+        const { EffectComposer, RenderPass, UnrealBloomPass } = THREE;
+        let scene, camera, renderer, controls, composer, clock;
         let waveLine, lineGeometry, gridMesh, gridGeometry;
-        let clock;
 
-        // --- Wave Simulation Parameters ---
-        const N_POINTS = 1000;
-        const X_MIN = -30;
-        const X_MAX = 30;
-        const X_RANGE = X_MAX - X_MIN; // Calculate range once
-        const VELOCITY_v = 5.0;
-        const WAVENUMBER_k = 2.0;
-        const TIME_SCALE = 0.5;
+        const N_POINTS = 1500;
+        const X_MIN = -40, X_MAX = 40, X_RANGE = X_MAX - X_MIN;
+        const VELOCITY = 8.0, WAVENUMBER = 2.5, TIME_SCALE = 0.7;
+        
+        // Smooth cycling parameters instead of linear growth
+        const AMPLITUDE_BASE = 2.0, AMPLITUDE_CYCLE_PERIOD = 25, AMPLITUDE_CYCLE_AMOUNT = 0.3;
+        const WIDTH_BASE = 1.5, WIDTH_CYCLE_PERIOD = 20, WIDTH_CYCLE_AMOUNT = 0.4;
+        const FREQ_BASE = WAVENUMBER * VELOCITY, FREQ_CYCLE_PERIOD = 18, FREQ_CYCLE_AMOUNT = 2.0;
+        
+        const GRID_SIZE = X_RANGE * 1.3, GRID_SEGMENTS = 60;
+        const GRID_Y_POS = -4.0, MAX_WARP_DEPTH = 2.0, WARP_WIDTH_SCALE = 1.8;
 
-        // --- Dynamic Wave Parameters ---
-        const INITIAL_AMPLITUDE_A = 1.5;
-        const AMPLITUDE_GROWTH_RATE = 0.2;
-        const INITIAL_PACKET_WIDTH_a = 0.5;
-        const SPREAD_RATE = 0.5;
-        const INITIAL_FREQUENCY_omega = WAVENUMBER_k * VELOCITY_v * 0.5;
-        const SPIN_UP_RATE = 5.0;
-
-        // --- Grid Parameters ---
-        const GRID_SIZE = X_RANGE * 1.2; // Make grid slightly larger than wave range
-        const GRID_SEGMENTS = 50;
-        const GRID_Y_POS = -3.0; // Position grid below the wave's center plane
-        const MAX_WARP_DEPTH = 1.5; // How deep the grid dips
-        const WARP_WIDTH_SCALE = 1.5; // How wide the warp effect is (relative to packet width 'a')
-
-        // Buffers
-        let wavePositionAttribute, waveColorAttribute;
         const wavePositions = new Float32Array(N_POINTS * 3);
         const waveColors = new Float32Array(N_POINTS * 3);
-
-        let gridPositionAttribute;
-        let originalGridVertices = []; // Store original grid vertex positions
+        let originalGridVertices = [];
 
         init();
         animate();
 
         function init() {
             clock = new THREE.Clock();
-            console.log("Initializing Warping Packet...");
-
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x000000);
+            scene.fog = new THREE.FogExp2(0x000000, 0.01);
 
-            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(10, 15, 35); // Adjusted view for grid
-            camera.lookAt(scene.position); // Look towards the center
+            camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(15, 20, 45);
+            camera.lookAt(0, 0, 0);
 
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             renderer.toneMapping = THREE.ACESFilmicToneMapping;
-            renderer.toneMappingExposure = 1.0;
+            renderer.toneMappingExposure = 1.2;
             document.getElementById('container').appendChild(renderer.domElement);
 
-            const ambientLight = new THREE.AmbientLight(0x606060);
-            scene.add(ambientLight);
-            // Add a light source slightly above to help see the grid warp
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.4);
-            directionalLight.position.set(0, 20, 10);
-            scene.add(directionalLight);
+            scene.add(new THREE.AmbientLight(0x505070, 0.6));
+            const light1 = new THREE.DirectionalLight(0x6688ff, 0.8);
+            light1.position.set(20, 30, 20);
+            scene.add(light1);
+            const light2 = new THREE.DirectionalLight(0xff6688, 0.5);
+            light2.position.set(-20, 20, -20);
+            scene.add(light2);
 
-
-            // === Wave Line Setup ===
+            // Wave line
             lineGeometry = new THREE.BufferGeometry();
             lineGeometry.setAttribute('position', new THREE.BufferAttribute(wavePositions, 3));
             lineGeometry.setAttribute('color', new THREE.BufferAttribute(waveColors, 3));
-            const lineMaterial = new THREE.LineBasicMaterial({ vertexColors: true });
+            const lineMaterial = new THREE.LineBasicMaterial({ vertexColors: true, linewidth: 2 });
             waveLine = new THREE.Line(lineGeometry, lineMaterial);
             scene.add(waveLine);
 
-            // === Grid Setup ===
+            // Grid
             gridGeometry = new THREE.PlaneGeometry(GRID_SIZE, GRID_SIZE, GRID_SEGMENTS, GRID_SEGMENTS);
-            // Rotate grid to be flat on XZ plane
             gridGeometry.rotateX(-Math.PI / 2);
-            gridGeometry.translate(0, GRID_Y_POS, 0); // Move it down
+            gridGeometry.translate(0, GRID_Y_POS, 0);
 
-            // Store original grid vertices
-            originalGridVertices = [];
             const gridPosAttr = gridGeometry.attributes.position;
             for (let i = 0; i < gridPosAttr.count; i++) {
                 originalGridVertices.push(new THREE.Vector3().fromBufferAttribute(gridPosAttr, i));
             }
-            console.log(`Stored ${originalGridVertices.length} original grid vertices.`);
 
             const gridMaterial = new THREE.MeshStandardMaterial({
-                color: 0x4444ff, // Bluish grid color
-                wireframe: true,
-                roughness: 0.8,
-                metalness: 0.2
+                color: 0x3366cc, wireframe: true, roughness: 0.7, metalness: 0.3,
+                transparent: true, opacity: 0.6, emissive: 0x112244, emissiveIntensity: 0.3
             });
             gridMesh = new THREE.Mesh(gridGeometry, gridMaterial);
             scene.add(gridMesh);
 
-            // === Controls ===
             controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.enableDamping = true;
-            controls.dampingFactor = 0.1;
-            controls.target.set(0, 0, 0); // Set target slightly below wave plane
+            controls.dampingFactor = 0.05;
+            controls.minDistance = 15;
+            controls.maxDistance = 120;
 
-            // === Post-processing (Bloom) ===
             composer = new EffectComposer(renderer);
-            const renderPass = new RenderPass(scene, camera);
-            composer.addPass(renderPass);
-            const bloomPass = new UnrealBloomPass(
-                new THREE.Vector2(window.innerWidth, window.innerHeight),
-                1.3, // strength (adjusted slightly)
-                0.5, // radius (adjusted slightly)
-                0.2  // threshold (adjusted slightly)
-            );
-            composer.addPass(bloomPass);
+            composer.addPass(new RenderPass(scene, camera));
+            composer.addPass(new UnrealBloomPass(
+                new THREE.Vector2(window.innerWidth, window.innerHeight), 1.4, 0.6, 0.3
+            ));
 
-            updateWavePacket(0); // Initial state
-            updateGrid(0);       // Initial grid state
+            updateWavePacket(0);
+            updateGrid(0);
             window.addEventListener('resize', onWindowResize, false);
-            console.log("Initialization complete.");
         }
 
-        // Function to calculate the wrapped center position
+        function smoothCycle(time, period, amount) {
+            return amount * Math.sin(2 * Math.PI * time / period);
+        }
+
         function getEffectiveCenter(time) {
-            const unwrappedCenter = VELOCITY_v * time;
-            // Modulo arithmetic to wrap around X_RANGE
+            const unwrappedCenter = VELOCITY * time;
             const offset = unwrappedCenter - X_MIN;
-            const wrappedOffset = ((offset % X_RANGE) + X_RANGE) % X_RANGE; // Ensure positive result for negative offsets
+            const wrappedOffset = ((offset % X_RANGE) + X_RANGE) % X_RANGE;
             return X_MIN + wrappedOffset;
         }
 
         function updateWavePacket(time) {
-            wavePositionAttribute = lineGeometry.getAttribute('position');
-            waveColorAttribute = lineGeometry.getAttribute('color');
-            const posArray = wavePositionAttribute.array;
-            const colorArray = waveColorAttribute.array;
+            const posArray = wavePositions;
+            const colorArray = waveColors;
 
-            const current_a = INITIAL_PACKET_WIDTH_a + SPREAD_RATE * time;
-            const current_omega = INITIAL_FREQUENCY_omega + SPIN_UP_RATE * time;
-            const current_A = INITIAL_AMPLITUDE_A + AMPLITUDE_GROWTH_RATE * time;
+            // Smooth cycling parameters
+            const current_A = AMPLITUDE_BASE + smoothCycle(time, AMPLITUDE_CYCLE_PERIOD, AMPLITUDE_CYCLE_AMOUNT);
+            const current_a = WIDTH_BASE + smoothCycle(time, WIDTH_CYCLE_PERIOD, WIDTH_CYCLE_AMOUNT);
+            const current_omega = FREQ_BASE + smoothCycle(time, FREQ_CYCLE_PERIOD, FREQ_CYCLE_AMOUNT);
             const a_sq = current_a * current_a;
             const tempColor = new THREE.Color();
-
-            // --- PERIODIC: Get effective center ---
             const effective_center_x = getEffectiveCenter(time);
 
             for (let i = 0; i < N_POINTS; i++) {
-                const x = X_MIN + (X_RANGE) * (i / (N_POINTS - 1));
+                const x = X_MIN + X_RANGE * (i / (N_POINTS - 1));
+                
+                // Smooth wrapping distance
+                let dx = x - effective_center_x;
+                if (Math.abs(dx) > X_RANGE / 2) {
+                    dx = dx > 0 ? dx - X_RANGE : dx + X_RANGE;
+                }
 
-                // --- PERIODIC: Use effective center for envelope calculation ---
-                const dx = x - effective_center_x;
                 const envelope = Math.exp(-(dx * dx) / (4 * a_sq));
-
-                // Phase uses original time for continuous spin
-                const phase = WAVENUMBER_k * x - current_omega * time;
-
+                const phase = WAVENUMBER * x - current_omega * time;
                 const realPart = Math.cos(phase);
                 const imagPart = Math.sin(phase);
 
-                const vx = x;
-                const vy = current_A * envelope * realPart;
-                const vz = current_A * envelope * imagPart;
-
                 const idx3 = i * 3;
-                posArray[idx3]     = vx;
-                posArray[idx3 + 1] = vy;
-                posArray[idx3 + 2] = vz;
+                posArray[idx3] = x;
+                posArray[idx3 + 1] = current_A * envelope * realPart;
+                posArray[idx3 + 2] = current_A * envelope * imagPart;
 
-                const hue = (phase / (2 * Math.PI)) % 1.0;
-                tempColor.setHSL(hue < 0 ? hue + 1 : hue, 1.0, 0.7);
-                colorArray[idx3]     = tempColor.r;
+                const hue = ((phase / (2 * Math.PI)) % 1.0 + 1) % 1.0;
+                tempColor.setHSL(hue, 1.0, 0.65);
+                colorArray[idx3] = tempColor.r;
                 colorArray[idx3 + 1] = tempColor.g;
                 colorArray[idx3 + 2] = tempColor.b;
             }
-            wavePositionAttribute.needsUpdate = true;
-            waveColorAttribute.needsUpdate = true;
+
+            lineGeometry.attributes.position.needsUpdate = true;
+            lineGeometry.attributes.color.needsUpdate = true;
             lineGeometry.computeBoundingSphere();
         }
 
         function updateGrid(time) {
-            gridPositionAttribute = gridGeometry.getAttribute('position');
-            const gridPosArray = gridPositionAttribute.array;
-
-            const current_a = INITIAL_PACKET_WIDTH_a + SPREAD_RATE * time;
-            const warp_width_sq = Math.pow(current_a * WARP_WIDTH_SCALE, 2); // Warp width based on current packet width
-
-            // --- PERIODIC: Get effective center for warp ---
+            const gridPosArray = gridGeometry.attributes.position.array;
+            const current_a = WIDTH_BASE + smoothCycle(time, WIDTH_CYCLE_PERIOD, WIDTH_CYCLE_AMOUNT);
+            const warp_width_sq = Math.pow(current_a * WARP_WIDTH_SCALE, 2);
             const effective_center_x = getEffectiveCenter(time);
 
             for (let i = 0; i < originalGridVertices.length; i++) {
                 const originalPos = originalGridVertices[i];
                 const vertexX = originalPos.x;
-                const vertexZ = originalPos.z; // Grid lies on XZ plane initially
 
-                // Calculate horizontal distance squared from vertex to effective packet center
-                const distSq = Math.pow(vertexX - effective_center_x, 2); // Only consider x distance for 1D warp
+                // Smooth wrapping distance
+                let dx = vertexX - effective_center_x;
+                if (Math.abs(dx) > X_RANGE / 2) {
+                    dx = dx > 0 ? dx - X_RANGE : dx + X_RANGE;
+                }
 
-                // Gaussian warp function (strongest at center_x, falls off)
+                const distSq = dx * dx;
                 const warpFactor = Math.exp(-distSq / warp_width_sq);
-                const warpY = -MAX_WARP_DEPTH * warpFactor; // Negative to dip down
+                const warpY = -MAX_WARP_DEPTH * warpFactor;
 
                 const idx = i * 3;
-                gridPosArray[idx]     = originalPos.x; // X remains original
-                gridPosArray[idx + 1] = originalPos.y + warpY; // Y is original + warp
-                gridPosArray[idx + 2] = originalPos.z; // Z remains original
+                gridPosArray[idx] = originalPos.x;
+                gridPosArray[idx + 1] = originalPos.y + warpY;
+                gridPosArray[idx + 2] = originalPos.z;
             }
 
-            gridPositionAttribute.needsUpdate = true;
-            gridGeometry.computeVertexNormals(); // Important for lighting on the warped grid
+            gridGeometry.attributes.position.needsUpdate = true;
+            gridGeometry.computeVertexNormals();
         }
 
-
         function onWindowResize() {
-            const width = window.innerWidth;
-            const height = window.innerHeight;
-            camera.aspect = width / height;
+            camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
-            renderer.setSize(width, height);
-            composer.setSize(width, height);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
         }
 
         function animate() {
             requestAnimationFrame(animate);
-            // Limit time to prevent extreme parameters (adjust cap as needed)
-            const timeCap = 20.0; // Increased cap slightly
-            const elapsedTime = Math.min(clock.getElapsedTime() * TIME_SCALE, timeCap);
-
+            // NO TIME CAP - infinite smooth loop
+            const elapsedTime = clock.getElapsedTime() * TIME_SCALE;
             updateWavePacket(elapsedTime);
-            updateGrid(elapsedTime); // Update the grid every frame
-
+            updateGrid(elapsedTime);
             controls.update();
             composer.render();
         }
