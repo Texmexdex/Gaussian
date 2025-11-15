@@ -20,8 +20,15 @@
             width: 200px; height: 150px;
             background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(15px);
             border: 1px solid rgba(100, 150, 255, 0.3);
-            border-radius: 10px; overflow: hidden;
+            border-radius: 10px; overflow: visible;
             box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+            position: relative;
+            transition: border-color 0.3s ease, box-shadow 0.3s ease;
+            cursor: help;
+        }
+        .projection-view:hover {
+            border-color: rgba(100, 200, 255, 0.6);
+            box-shadow: 0 6px 24px rgba(100, 150, 255, 0.4);
         }
         .projection-view canvas { width: 100%; height: 100%; display: block; }
         .projection-label {
@@ -29,6 +36,28 @@
             font-size: 11px; color: #88ccff; font-weight: 600;
             text-shadow: 0 0 8px rgba(0, 0, 0, 0.8);
             pointer-events: none; z-index: 1;
+        }
+        .tooltip {
+            position: absolute; right: 220px; top: 0;
+            width: 280px; padding: 15px;
+            background: rgba(10, 10, 30, 0.95); backdrop-filter: blur(20px);
+            border: 1px solid rgba(100, 200, 255, 0.4);
+            border-radius: 10px;
+            font-size: 12px; line-height: 1.6; color: #aabbcc;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.3s ease;
+            z-index: 100;
+        }
+        .tooltip strong {
+            color: #88ccff; display: block; margin-bottom: 8px;
+            font-size: 13px;
+        }
+        .projection-view:hover .tooltip {
+            opacity: 1;
+        }
+        @media (max-width: 1200px) {
+            .tooltip { display: none; }
         }
         @media (max-width: 768px) {
             #projections { display: none; }
@@ -63,17 +92,37 @@
     <div id="container"></div>
     
     <div id="projections">
-        <div class="projection-view">
+        <div class="projection-view" data-tooltip="side">
             <div class="projection-label">Side View (XY)</div>
             <canvas id="sideCanvas"></canvas>
+            <div class="tooltip">
+                <strong>Side View (XY Plane)</strong><br>
+                Shows the real component oscillating up and down. This is what you'd see if you looked at the wave from the side - a classic sine wave with a Gaussian envelope (peaks are highest in the middle, fade at edges).
+            </div>
         </div>
-        <div class="projection-view">
+        <div class="projection-view" data-tooltip="end">
             <div class="projection-label">End View (YZ)</div>
             <canvas id="endCanvas"></canvas>
+            <div class="tooltip">
+                <strong>End View (YZ Plane)</strong><br>
+                Looking through the wave from one end, you see a circular pattern. The real (Y) and imaginary (Z) components trace out circles, showing the wave's rotation in complex space. The envelope makes it look like nested circles.
+            </div>
         </div>
-        <div class="projection-view">
+        <div class="projection-view" data-tooltip="top">
             <div class="projection-label">Top View (XZ)</div>
             <canvas id="topCanvas"></canvas>
+            <div class="tooltip">
+                <strong>Top View (XZ Plane)</strong><br>
+                Shows the imaginary component oscillating forward and back. This is 90° out of phase with the side view, demonstrating the complex nature of the quantum wave function.
+            </div>
+        </div>
+        <div class="projection-view" data-tooltip="phase">
+            <div class="projection-label">Phase Spectrum</div>
+            <canvas id="phaseCanvas"></canvas>
+            <div class="tooltip">
+                <strong>Phase Visualization</strong><br>
+                Colors represent the wave's phase: φ = kx - ωt. As the phase cycles from 0 to 2π, colors flow through the spectrum (red → yellow → green → cyan → blue → magenta → red). This shows where each point is in its oscillation cycle and is crucial for quantum interference.
+            </div>
         </div>
     </div>
     
@@ -100,7 +149,7 @@
         const { EffectComposer, RenderPass, UnrealBloomPass } = THREE;
         let scene, camera, renderer, controls, composer, clock;
         let waveLine, lineGeometry, gridMesh, gridGeometry;
-        let sideCtx, endCtx, topCtx;
+        let sideCtx, endCtx, topCtx, phaseCtx;
 
         const N_POINTS = 1500;
         const X_MIN = -40, X_MAX = 40, X_RANGE = X_MAX - X_MIN;
@@ -128,6 +177,7 @@
             const sideCanvas = document.getElementById('sideCanvas');
             const endCanvas = document.getElementById('endCanvas');
             const topCanvas = document.getElementById('topCanvas');
+            const phaseCanvas = document.getElementById('phaseCanvas');
             
             sideCanvas.width = 400;
             sideCanvas.height = 300;
@@ -135,10 +185,13 @@
             endCanvas.height = 300;
             topCanvas.width = 400;
             topCanvas.height = 300;
+            phaseCanvas.width = 400;
+            phaseCanvas.height = 300;
             
             sideCtx = sideCanvas.getContext('2d');
             endCtx = endCanvas.getContext('2d');
             topCtx = topCanvas.getContext('2d');
+            phaseCtx = phaseCanvas.getContext('2d');
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x000000);
             scene.fog = new THREE.FogExp2(0x000000, 0.01);
@@ -425,6 +478,88 @@
             }
             topCtx.lineWidth = 2;
             topCtx.stroke();
+            
+            // Phase spectrum view - shows color flow across the wave
+            phaseCtx.fillStyle = '#000';
+            phaseCtx.fillRect(0, 0, 400, 300);
+            drawGrid(phaseCtx);
+            
+            // Draw phase as a color gradient strip
+            const stripHeight = 80;
+            const stripY = 110;
+            
+            for (let i = 0; i < N_POINTS; i++) {
+                const idx = i * 3;
+                const x = posArray[idx];
+                const envelope = Math.sqrt(posArray[idx + 1] ** 2 + posArray[idx + 2] ** 2);
+                
+                const screenX = ((x - X_MIN) / X_RANGE) * 400;
+                
+                const r = colorArray[idx];
+                const g = colorArray[idx + 1];
+                const b = colorArray[idx + 2];
+                
+                // Draw vertical color bar with height based on envelope
+                const barHeight = Math.max(5, envelope * 30);
+                phaseCtx.fillStyle = `rgb(${r*255}, ${g*255}, ${b*255})`;
+                phaseCtx.fillRect(screenX - 1, stripY + stripHeight/2 - barHeight/2, 3, barHeight);
+            }
+            
+            // Draw envelope outline
+            phaseCtx.beginPath();
+            phaseCtx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            phaseCtx.lineWidth = 1.5;
+            for (let i = 0; i < N_POINTS; i++) {
+                const idx = i * 3;
+                const x = posArray[idx];
+                const envelope = Math.sqrt(posArray[idx + 1] ** 2 + posArray[idx + 2] ** 2);
+                
+                const screenX = ((x - X_MIN) / X_RANGE) * 400;
+                const envelopeHeight = envelope * 30;
+                
+                if (i === 0) phaseCtx.moveTo(screenX, stripY + stripHeight/2 - envelopeHeight/2);
+                else phaseCtx.lineTo(screenX, stripY + stripHeight/2 - envelopeHeight/2);
+            }
+            phaseCtx.stroke();
+            
+            phaseCtx.beginPath();
+            for (let i = 0; i < N_POINTS; i++) {
+                const idx = i * 3;
+                const x = posArray[idx];
+                const envelope = Math.sqrt(posArray[idx + 1] ** 2 + posArray[idx + 2] ** 2);
+                
+                const screenX = ((x - X_MIN) / X_RANGE) * 400;
+                const envelopeHeight = envelope * 30;
+                
+                if (i === 0) phaseCtx.moveTo(screenX, stripY + stripHeight/2 + envelopeHeight/2);
+                else phaseCtx.lineTo(screenX, stripY + stripHeight/2 + envelopeHeight/2);
+            }
+            phaseCtx.stroke();
+            
+            // Add labels
+            phaseCtx.fillStyle = '#88ccff';
+            phaseCtx.font = '11px sans-serif';
+            phaseCtx.fillText('Phase: 0', 10, stripY - 10);
+            phaseCtx.fillText('2π', 370, stripY - 10);
+            phaseCtx.fillText('Color = Phase Angle', 130, stripY + stripHeight + 25);
+            
+            // Draw phase arrow showing direction of propagation
+            const arrowY = stripY + stripHeight + 50;
+            phaseCtx.strokeStyle = '#88ccff';
+            phaseCtx.fillStyle = '#88ccff';
+            phaseCtx.lineWidth = 2;
+            phaseCtx.beginPath();
+            phaseCtx.moveTo(50, arrowY);
+            phaseCtx.lineTo(350, arrowY);
+            phaseCtx.stroke();
+            phaseCtx.beginPath();
+            phaseCtx.moveTo(350, arrowY);
+            phaseCtx.lineTo(340, arrowY - 5);
+            phaseCtx.lineTo(340, arrowY + 5);
+            phaseCtx.closePath();
+            phaseCtx.fill();
+            phaseCtx.font = '10px sans-serif';
+            phaseCtx.fillText('Wave Propagation →', 140, arrowY - 10);
         }
 
         function animate() {
