@@ -14,7 +14,8 @@
         #container { width: 100vw; height: 100vh; display: block; }
         #projections {
             position: absolute; bottom: 20px; right: 20px;
-            display: flex; flex-direction: column; gap: 15px; z-index: 10;
+            display: grid; grid-template-columns: repeat(2, 200px);
+            gap: 15px; z-index: 10;
         }
         .projection-view {
             width: 200px; height: 150px;
@@ -124,6 +125,38 @@
                 Colors represent the wave's phase: φ = kx - ωt. As the phase cycles from 0 to 2π, colors flow through the spectrum (red → yellow → green → cyan → blue → magenta → red). This shows where each point is in its oscillation cycle and is crucial for quantum interference.
             </div>
         </div>
+        <div class="projection-view" data-tooltip="probability">
+            <div class="projection-label">Probability |Ψ|²</div>
+            <canvas id="probabilityCanvas"></canvas>
+            <div class="tooltip">
+                <strong>Probability Density</strong><br>
+                Shows |Ψ|² - the probability of finding the particle at each position. This is what you'd measure in an experiment. The Gaussian shape shows the particle is most likely near the center of the packet.
+            </div>
+        </div>
+        <div class="projection-view" data-tooltip="complex">
+            <div class="projection-label">Complex Plane</div>
+            <canvas id="complexCanvas"></canvas>
+            <div class="tooltip">
+                <strong>Complex Plane (Argand Diagram)</strong><br>
+                Plots Re(Ψ) vs Im(Ψ) as a parametric curve. The 3D helix "unwrapped" into 2D complex space. The spiral shows how the wave rotates in the complex plane, with radius determined by the Gaussian envelope.
+            </div>
+        </div>
+        <div class="projection-view" data-tooltip="momentum">
+            <div class="projection-label">Momentum Space</div>
+            <canvas id="momentumCanvas"></canvas>
+            <div class="tooltip">
+                <strong>Momentum Space (Fourier Transform)</strong><br>
+                The wave packet in momentum/frequency domain. By Heisenberg's uncertainty principle, a narrow position spread (Gaussian) gives a wide momentum spread. Shows wave-particle duality: localized in space = spread in momentum.
+            </div>
+        </div>
+        <div class="projection-view" data-tooltip="spacetime">
+            <div class="projection-label">Spacetime</div>
+            <canvas id="spacetimeCanvas"></canvas>
+            <div class="tooltip">
+                <strong>Spacetime Diagram</strong><br>
+                Position (x) vs Time showing the wave packet's worldline. The diagonal streak shows the packet moving at constant velocity. Color shows phase evolution. This is how the wave packet travels through spacetime.
+            </div>
+        </div>
     </div>
     
     <div id="info">
@@ -149,7 +182,8 @@
         const { EffectComposer, RenderPass, UnrealBloomPass } = THREE;
         let scene, camera, renderer, controls, composer, clock;
         let waveLine, lineGeometry, gridMesh, gridGeometry;
-        let sideCtx, endCtx, topCtx, phaseCtx;
+        let sideCtx, endCtx, topCtx, phaseCtx, probabilityCtx, complexCtx, momentumCtx, spacetimeCtx;
+        let spacetimeHistory = [];
 
         const N_POINTS = 1500;
         const X_MIN = -40, X_MAX = 40, X_RANGE = X_MAX - X_MIN;
@@ -178,20 +212,27 @@
             const endCanvas = document.getElementById('endCanvas');
             const topCanvas = document.getElementById('topCanvas');
             const phaseCanvas = document.getElementById('phaseCanvas');
+            const probabilityCanvas = document.getElementById('probabilityCanvas');
+            const complexCanvas = document.getElementById('complexCanvas');
+            const momentumCanvas = document.getElementById('momentumCanvas');
+            const spacetimeCanvas = document.getElementById('spacetimeCanvas');
             
-            sideCanvas.width = 400;
-            sideCanvas.height = 300;
-            endCanvas.width = 400;
-            endCanvas.height = 300;
-            topCanvas.width = 400;
-            topCanvas.height = 300;
-            phaseCanvas.width = 400;
-            phaseCanvas.height = 300;
+            [sideCanvas, endCanvas, topCanvas, phaseCanvas, probabilityCanvas, complexCanvas, momentumCanvas, spacetimeCanvas].forEach(canvas => {
+                canvas.width = 400;
+                canvas.height = 300;
+            });
             
             sideCtx = sideCanvas.getContext('2d');
             endCtx = endCanvas.getContext('2d');
             topCtx = topCanvas.getContext('2d');
             phaseCtx = phaseCanvas.getContext('2d');
+            probabilityCtx = probabilityCanvas.getContext('2d');
+            complexCtx = complexCanvas.getContext('2d');
+            momentumCtx = momentumCanvas.getContext('2d');
+            spacetimeCtx = spacetimeCanvas.getContext('2d');
+            
+            // Initialize spacetime history buffer
+            spacetimeHistory = [];
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x000000);
             scene.fog = new THREE.FogExp2(0x000000, 0.01);
@@ -560,12 +601,220 @@
             phaseCtx.fill();
             phaseCtx.font = '10px sans-serif';
             phaseCtx.fillText('Wave Propagation →', 140, arrowY - 10);
+            
+            // Probability Density |Ψ|²
+            probabilityCtx.fillStyle = '#000';
+            probabilityCtx.fillRect(0, 0, 400, 300);
+            drawGrid(probabilityCtx);
+            drawCenterLines(probabilityCtx);
+            
+            probabilityCtx.beginPath();
+            probabilityCtx.fillStyle = 'rgba(100, 255, 150, 0.3)';
+            probabilityCtx.moveTo(0, 300);
+            for (let i = 0; i < N_POINTS; i++) {
+                const idx = i * 3;
+                const x = posArray[idx];
+                const y = posArray[idx + 1];
+                const z = posArray[idx + 2];
+                const probDensity = (y * y + z * z) / (AMPLITUDE_BASE * AMPLITUDE_BASE);
+                
+                const screenX = ((x - X_MIN) / X_RANGE) * 400;
+                const screenY = 150 - probDensity * 100;
+                
+                if (i === 0) probabilityCtx.moveTo(screenX, 300);
+                probabilityCtx.lineTo(screenX, screenY);
+            }
+            probabilityCtx.lineTo(400, 300);
+            probabilityCtx.closePath();
+            probabilityCtx.fill();
+            
+            probabilityCtx.beginPath();
+            probabilityCtx.strokeStyle = '#44ff88';
+            probabilityCtx.lineWidth = 2;
+            for (let i = 0; i < N_POINTS; i++) {
+                const idx = i * 3;
+                const x = posArray[idx];
+                const y = posArray[idx + 1];
+                const z = posArray[idx + 2];
+                const probDensity = (y * y + z * z) / (AMPLITUDE_BASE * AMPLITUDE_BASE);
+                
+                const screenX = ((x - X_MIN) / X_RANGE) * 400;
+                const screenY = 150 - probDensity * 100;
+                
+                if (i === 0) probabilityCtx.moveTo(screenX, screenY);
+                else probabilityCtx.lineTo(screenX, screenY);
+            }
+            probabilityCtx.stroke();
+            
+            probabilityCtx.fillStyle = '#88ffbb';
+            probabilityCtx.font = '11px sans-serif';
+            probabilityCtx.fillText('|Ψ|²', 10, 20);
+            
+            // Complex Plane (Argand Diagram)
+            complexCtx.fillStyle = '#000';
+            complexCtx.fillRect(0, 0, 400, 300);
+            drawGrid(complexCtx);
+            drawCenterLines(complexCtx);
+            
+            const maxAmplitude = AMPLITUDE_BASE * 1.5;
+            const scale = 100 / maxAmplitude;
+            
+            complexCtx.beginPath();
+            for (let i = 0; i < N_POINTS; i++) {
+                const idx = i * 3;
+                const realPart = posArray[idx + 1];
+                const imagPart = posArray[idx + 2];
+                
+                const screenX = 200 + realPart * scale;
+                const screenY = 150 - imagPart * scale;
+                
+                if (i === 0) complexCtx.moveTo(screenX, screenY);
+                else complexCtx.lineTo(screenX, screenY);
+            }
+            complexCtx.strokeStyle = '#ff88ff';
+            complexCtx.lineWidth = 2;
+            complexCtx.stroke();
+            
+            // Draw points along the spiral
+            for (let i = 0; i < N_POINTS; i += 30) {
+                const idx = i * 3;
+                const realPart = posArray[idx + 1];
+                const imagPart = posArray[idx + 2];
+                
+                const screenX = 200 + realPart * scale;
+                const screenY = 150 - imagPart * scale;
+                
+                const r = colorArray[idx];
+                const g = colorArray[idx + 1];
+                const b = colorArray[idx + 2];
+                
+                complexCtx.fillStyle = `rgb(${r*255}, ${g*255}, ${b*255})`;
+                complexCtx.beginPath();
+                complexCtx.arc(screenX, screenY, 3, 0, Math.PI * 2);
+                complexCtx.fill();
+            }
+            
+            complexCtx.fillStyle = '#ff88ff';
+            complexCtx.font = '11px sans-serif';
+            complexCtx.fillText('Re(Ψ)', 360, 155);
+            complexCtx.fillText('Im(Ψ)', 205, 20);
+            
+            // Momentum Space (Fourier Transform approximation)
+            momentumCtx.fillStyle = '#000';
+            momentumCtx.fillRect(0, 0, 400, 300);
+            drawGrid(momentumCtx);
+            drawCenterLines(momentumCtx);
+            
+            // Approximate momentum space: wider in momentum when narrow in position
+            const current_a = WIDTH_BASE + smoothCycle(elapsedTime, WIDTH_CYCLE_PERIOD, WIDTH_CYCLE_AMOUNT);
+            const momentum_width = 1.0 / current_a; // Uncertainty principle
+            const k_center = WAVENUMBER;
+            
+            momentumCtx.beginPath();
+            momentumCtx.fillStyle = 'rgba(255, 150, 100, 0.3)';
+            momentumCtx.moveTo(0, 300);
+            for (let i = 0; i < 200; i++) {
+                const k = k_center - 5 + (i / 200) * 10;
+                const momentum_envelope = Math.exp(-Math.pow(k - k_center, 2) / (2 * momentum_width * momentum_width));
+                
+                const screenX = (i / 200) * 400;
+                const screenY = 150 - momentum_envelope * 120;
+                
+                if (i === 0) momentumCtx.moveTo(screenX, 300);
+                momentumCtx.lineTo(screenX, screenY);
+            }
+            momentumCtx.lineTo(400, 300);
+            momentumCtx.closePath();
+            momentumCtx.fill();
+            
+            momentumCtx.beginPath();
+            momentumCtx.strokeStyle = '#ff8844';
+            momentumCtx.lineWidth = 2;
+            for (let i = 0; i < 200; i++) {
+                const k = k_center - 5 + (i / 200) * 10;
+                const momentum_envelope = Math.exp(-Math.pow(k - k_center, 2) / (2 * momentum_width * momentum_width));
+                
+                const screenX = (i / 200) * 400;
+                const screenY = 150 - momentum_envelope * 120;
+                
+                if (i === 0) momentumCtx.moveTo(screenX, screenY);
+                else momentumCtx.lineTo(screenX, screenY);
+            }
+            momentumCtx.stroke();
+            
+            momentumCtx.fillStyle = '#ffaa66';
+            momentumCtx.font = '11px sans-serif';
+            momentumCtx.fillText('|Φ(k)|²', 10, 20);
+            momentumCtx.fillText('Narrow in x → Wide in k', 100, 280);
+            
+            // Spacetime Diagram
+            spacetimeCtx.fillStyle = '#000';
+            spacetimeCtx.fillRect(0, 0, 400, 300);
+            drawGrid(spacetimeCtx);
+            
+            // Store current wave state in history
+            const effective_center_x = getEffectiveCenter(elapsedTime);
+            spacetimeHistory.push({
+                time: elapsedTime,
+                center: effective_center_x,
+                positions: new Float32Array(posArray),
+                colors: new Float32Array(colorArray)
+            });
+            
+            // Keep only last 100 time steps
+            if (spacetimeHistory.length > 100) spacetimeHistory.shift();
+            
+            // Draw spacetime history
+            const timeScale = 300 / 30; // 30 time units fit in height
+            const oldestTime = spacetimeHistory[0].time;
+            
+            for (let t = 0; t < spacetimeHistory.length; t++) {
+                const snapshot = spacetimeHistory[t];
+                const relativeTime = snapshot.time - oldestTime;
+                const screenY = 300 - relativeTime * timeScale;
+                
+                if (screenY < 0) continue;
+                
+                for (let i = 0; i < N_POINTS; i += 10) {
+                    const idx = i * 3;
+                    const x = snapshot.positions[idx];
+                    const amplitude = Math.sqrt(snapshot.positions[idx + 1] ** 2 + snapshot.positions[idx + 2] ** 2);
+                    
+                    const screenX = ((x - X_MIN) / X_RANGE) * 400;
+                    
+                    const r = snapshot.colors[idx];
+                    const g = snapshot.colors[idx + 1];
+                    const b = snapshot.colors[idx + 2];
+                    const alpha = amplitude / AMPLITUDE_BASE * 0.8;
+                    
+                    spacetimeCtx.fillStyle = `rgba(${r*255}, ${g*255}, ${b*255}, ${alpha})`;
+                    spacetimeCtx.fillRect(screenX - 1, screenY - 1, 2, 2);
+                }
+            }
+            
+            spacetimeCtx.strokeStyle = 'rgba(100, 150, 255, 0.3)';
+            spacetimeCtx.lineWidth = 1;
+            spacetimeCtx.beginPath();
+            spacetimeCtx.moveTo(0, 150);
+            spacetimeCtx.lineTo(400, 150);
+            spacetimeCtx.stroke();
+            
+            spacetimeCtx.fillStyle = '#88ccff';
+            spacetimeCtx.font = '11px sans-serif';
+            spacetimeCtx.fillText('Position →', 320, 290);
+            spacetimeCtx.save();
+            spacetimeCtx.translate(15, 150);
+            spacetimeCtx.rotate(-Math.PI / 2);
+            spacetimeCtx.fillText('Time →', 0, 0);
+            spacetimeCtx.restore();
         }
+        
+        let elapsedTime = 0;
 
         function animate() {
             requestAnimationFrame(animate);
             // NO TIME CAP - infinite smooth loop
-            const elapsedTime = clock.getElapsedTime() * TIME_SCALE;
+            elapsedTime = clock.getElapsedTime() * TIME_SCALE;
             updateWavePacket(elapsedTime);
             updateGrid(elapsedTime);
             draw2DProjections();
