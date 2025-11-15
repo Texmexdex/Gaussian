@@ -184,6 +184,7 @@
         let waveLine, lineGeometry, gridMesh, gridGeometry;
         let sideCtx, endCtx, topCtx, phaseCtx, probabilityCtx, complexCtx, momentumCtx, spacetimeCtx;
         let spacetimeHistory = [];
+        let elapsedTime = 0;
 
         const N_POINTS = 1500;
         const X_MIN = -40, X_MAX = 40, X_RANGE = X_MAX - X_MIN;
@@ -808,8 +809,6 @@
             spacetimeCtx.fillText('Time →', 0, 0);
             spacetimeCtx.restore();
         }
-        
-        let elapsedTime = 0;
 
         function animate() {
             requestAnimationFrame(animate);
