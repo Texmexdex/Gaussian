@@ -14,8 +14,22 @@
         #container { width: 100vw; height: 100vh; display: block; }
         #projections {
             position: absolute; bottom: 20px; right: 20px;
-            display: grid; grid-template-columns: repeat(2, 200px);
+            display: grid; grid-template-columns: repeat(3, 200px);
             gap: 15px; z-index: 10;
+            max-height: calc(100vh - 40px);
+            overflow-y: auto;
+            padding-right: 5px;
+        }
+        #projections::-webkit-scrollbar {
+            width: 6px;
+        }
+        #projections::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 3px;
+        }
+        #projections::-webkit-scrollbar-thumb {
+            background: rgba(100, 150, 255, 0.5);
+            border-radius: 3px;
         }
         .projection-view {
             width: 200px; height: 150px;
@@ -157,6 +171,38 @@
                 Position (x) vs Time showing the wave packet's worldline. The diagonal streak shows the packet moving at constant velocity. Color shows phase evolution. This is how the wave packet travels through spacetime.
             </div>
         </div>
+        <div class="projection-view" data-tooltip="wigner">
+            <div class="projection-label">Wigner Function</div>
+            <canvas id="wignerCanvas"></canvas>
+            <div class="tooltip">
+                <strong>Wigner Function (Phase Space)</strong><br>
+                Shows position and momentum simultaneously. The bright region shows where the particle is likely to be found in phase space. This quasi-probability distribution can be negative (quantum weirdness!).
+            </div>
+        </div>
+        <div class="projection-view" data-tooltip="husimi">
+            <div class="projection-label">Husimi Q-Function</div>
+            <canvas id="husimiCanvas"></canvas>
+            <div class="tooltip">
+                <strong>Husimi Q-Function</strong><br>
+                A smoothed version of the Wigner function, always positive. Shows the quantum state in phase space with Gaussian smoothing. The ellipse shape shows position-momentum uncertainty.
+            </div>
+        </div>
+        <div class="projection-view" data-tooltip="envelope">
+            <div class="projection-label">Amplitude Envelope</div>
+            <canvas id="envelopeCanvas"></canvas>
+            <div class="tooltip">
+                <strong>Amplitude Envelope</strong><br>
+                Just the Gaussian envelope without oscillations. Shows the packet's spatial extent and how it's localized in space. The width σ determines the position uncertainty.
+            </div>
+        </div>
+        <div class="projection-view" data-tooltip="phaseplot">
+            <div class="projection-label">Phase vs Position</div>
+            <canvas id="phasePlotCanvas"></canvas>
+            <div class="tooltip">
+                <strong>Phase vs Position</strong><br>
+                Shows how the phase φ = kx - ωt changes linearly with position. The slope is the wavenumber k. Discontinuities show 2π wrapping. This is the "unwrapped" phase progression.
+            </div>
+        </div>
     </div>
     
     <div id="info">
@@ -183,6 +229,7 @@
         let scene, camera, renderer, controls, composer, clock;
         let waveLine, lineGeometry, gridMesh, gridGeometry;
         let sideCtx, endCtx, topCtx, phaseCtx, probabilityCtx, complexCtx, momentumCtx, spacetimeCtx;
+        let wignerCtx, husimiCtx, envelopeCtx, phasePlotCtx;
         let spacetimeHistory = [];
         let elapsedTime = 0;
 
@@ -217,8 +264,13 @@
             const complexCanvas = document.getElementById('complexCanvas');
             const momentumCanvas = document.getElementById('momentumCanvas');
             const spacetimeCanvas = document.getElementById('spacetimeCanvas');
+            const wignerCanvas = document.getElementById('wignerCanvas');
+            const husimiCanvas = document.getElementById('husimiCanvas');
+            const envelopeCanvas = document.getElementById('envelopeCanvas');
+            const phasePlotCanvas = document.getElementById('phasePlotCanvas');
             
-            [sideCanvas, endCanvas, topCanvas, phaseCanvas, probabilityCanvas, complexCanvas, momentumCanvas, spacetimeCanvas].forEach(canvas => {
+            [sideCanvas, endCanvas, topCanvas, phaseCanvas, probabilityCanvas, complexCanvas, momentumCanvas, spacetimeCanvas,
+             wignerCanvas, husimiCanvas, envelopeCanvas, phasePlotCanvas].forEach(canvas => {
                 canvas.width = 400;
                 canvas.height = 300;
             });
@@ -231,6 +283,10 @@
             complexCtx = complexCanvas.getContext('2d');
             momentumCtx = momentumCanvas.getContext('2d');
             spacetimeCtx = spacetimeCanvas.getContext('2d');
+            wignerCtx = wignerCanvas.getContext('2d');
+            husimiCtx = husimiCanvas.getContext('2d');
+            envelopeCtx = envelopeCanvas.getContext('2d');
+            phasePlotCtx = phasePlotCanvas.getContext('2d');
             
             // Initialize spacetime history buffer
             spacetimeHistory = [];
@@ -808,6 +864,175 @@
             spacetimeCtx.rotate(-Math.PI / 2);
             spacetimeCtx.fillText('Time →', 0, 0);
             spacetimeCtx.restore();
+            
+            // Wigner Function (Phase Space)
+            wignerCtx.fillStyle = '#000';
+            wignerCtx.fillRect(0, 0, 400, 300);
+            drawGrid(wignerCtx);
+            drawCenterLines(wignerCtx);
+            
+            const current_a = WIDTH_BASE + smoothCycle(elapsedTime, WIDTH_CYCLE_PERIOD, WIDTH_CYCLE_AMOUNT);
+            const effective_center_x = getEffectiveCenter(elapsedTime);
+            
+            // Simplified Wigner function visualization
+            for (let px = 0; px < 400; px += 4) {
+                for (let py = 0; py < 300; py += 4) {
+                    const x = X_MIN + (px / 400) * X_RANGE;
+                    const k = WAVENUMBER + (py / 300 - 0.5) * 8;
+                    
+                    let dx = x - effective_center_x;
+                    if (Math.abs(dx) > X_RANGE / 2) {
+                        dx = dx > 0 ? dx - X_RANGE : dx + X_RANGE;
+                    }
+                    
+                    const position_factor = Math.exp(-dx * dx / (4 * current_a * current_a));
+                    const momentum_factor = Math.exp(-Math.pow(k - WAVENUMBER, 2) * current_a * current_a);
+                    const wigner = position_factor * momentum_factor;
+                    
+                    const intensity = Math.min(255, wigner * 255);
+                    wignerCtx.fillStyle = `rgba(100, 150, 255, ${intensity / 255})`;
+                    wignerCtx.fillRect(px, 300 - py, 4, 4);
+                }
+            }
+            
+            wignerCtx.fillStyle = '#88ccff';
+            wignerCtx.font = '11px sans-serif';
+            wignerCtx.fillText('Position →', 320, 290);
+            wignerCtx.save();
+            wignerCtx.translate(15, 150);
+            wignerCtx.rotate(-Math.PI / 2);
+            wignerCtx.fillText('Momentum →', 0, 0);
+            wignerCtx.restore();
+            
+            // Husimi Q-Function (Smoothed Phase Space)
+            husimiCtx.fillStyle = '#000';
+            husimiCtx.fillRect(0, 0, 400, 300);
+            drawGrid(husimiCtx);
+            drawCenterLines(husimiCtx);
+            
+            // Husimi is always positive (smoothed Wigner)
+            for (let px = 0; px < 400; px += 4) {
+                for (let py = 0; py < 300; py += 4) {
+                    const x = X_MIN + (px / 400) * X_RANGE;
+                    const k = WAVENUMBER + (py / 300 - 0.5) * 6;
+                    
+                    let dx = x - effective_center_x;
+                    if (Math.abs(dx) > X_RANGE / 2) {
+                        dx = dx > 0 ? dx - X_RANGE : dx + X_RANGE;
+                    }
+                    
+                    const smoothing = 1.5;
+                    const position_factor = Math.exp(-dx * dx / (4 * current_a * current_a * smoothing));
+                    const momentum_factor = Math.exp(-Math.pow(k - WAVENUMBER, 2) * current_a * current_a / smoothing);
+                    const husimi = position_factor * momentum_factor;
+                    
+                    const intensity = Math.min(255, husimi * 255);
+                    husimiCtx.fillStyle = `rgba(255, 150, 200, ${intensity / 255})`;
+                    husimiCtx.fillRect(px, 300 - py, 4, 4);
+                }
+            }
+            
+            husimiCtx.fillStyle = '#ffaacc';
+            husimiCtx.font = '11px sans-serif';
+            husimiCtx.fillText('Position →', 320, 290);
+            husimiCtx.save();
+            husimiCtx.translate(15, 150);
+            husimiCtx.rotate(-Math.PI / 2);
+            husimiCtx.fillText('Momentum →', 0, 0);
+            husimiCtx.restore();
+            
+            // Amplitude Envelope
+            envelopeCtx.fillStyle = '#000';
+            envelopeCtx.fillRect(0, 0, 400, 300);
+            drawGrid(envelopeCtx);
+            drawCenterLines(envelopeCtx);
+            
+            envelopeCtx.beginPath();
+            envelopeCtx.fillStyle = 'rgba(150, 200, 255, 0.3)';
+            envelopeCtx.moveTo(0, 300);
+            for (let i = 0; i < N_POINTS; i++) {
+                const idx = i * 3;
+                const x = posArray[idx];
+                const y = posArray[idx + 1];
+                const z = posArray[idx + 2];
+                const envelope = Math.sqrt(y * y + z * z);
+                
+                const screenX = ((x - X_MIN) / X_RANGE) * 400;
+                const screenY = 150 - envelope * 50;
+                
+                if (i === 0) envelopeCtx.moveTo(screenX, 300);
+                envelopeCtx.lineTo(screenX, screenY);
+            }
+            envelopeCtx.lineTo(400, 300);
+            envelopeCtx.closePath();
+            envelopeCtx.fill();
+            
+            envelopeCtx.beginPath();
+            envelopeCtx.strokeStyle = '#6699ff';
+            envelopeCtx.lineWidth = 2;
+            for (let i = 0; i < N_POINTS; i++) {
+                const idx = i * 3;
+                const x = posArray[idx];
+                const y = posArray[idx + 1];
+                const z = posArray[idx + 2];
+                const envelope = Math.sqrt(y * y + z * z);
+                
+                const screenX = ((x - X_MIN) / X_RANGE) * 400;
+                const screenY = 150 - envelope * 50;
+                
+                if (i === 0) envelopeCtx.moveTo(screenX, screenY);
+                else envelopeCtx.lineTo(screenX, screenY);
+            }
+            envelopeCtx.stroke();
+            
+            envelopeCtx.fillStyle = '#88bbff';
+            envelopeCtx.font = '11px sans-serif';
+            envelopeCtx.fillText('A·exp[-(x-vt)²/4σ²]', 10, 20);
+            envelopeCtx.fillText('Width σ = ' + current_a.toFixed(2), 10, 280);
+            
+            // Phase vs Position
+            phasePlotCtx.fillStyle = '#000';
+            phasePlotCtx.fillRect(0, 0, 400, 300);
+            drawGrid(phasePlotCtx);
+            drawCenterLines(phasePlotCtx);
+            
+            const current_omega = FREQ_BASE + smoothCycle(elapsedTime, FREQ_CYCLE_PERIOD, FREQ_CYCLE_AMOUNT);
+            
+            phasePlotCtx.beginPath();
+            for (let i = 0; i < N_POINTS; i++) {
+                const idx = i * 3;
+                const x = posArray[idx];
+                const phase = (WAVENUMBER * x - current_omega * elapsedTime) % (2 * Math.PI);
+                const normalizedPhase = ((phase / (2 * Math.PI)) + 1) % 1;
+                
+                const screenX = ((x - X_MIN) / X_RANGE) * 400;
+                const screenY = 150 - (normalizedPhase - 0.5) * 200;
+                
+                const r = colorArray[idx];
+                const g = colorArray[idx + 1];
+                const b = colorArray[idx + 2];
+                
+                phasePlotCtx.fillStyle = `rgb(${r*255}, ${g*255}, ${b*255})`;
+                phasePlotCtx.fillRect(screenX - 1, screenY - 1, 2, 2);
+            }
+            
+            phasePlotCtx.strokeStyle = 'rgba(100, 150, 255, 0.3)';
+            phasePlotCtx.lineWidth = 1;
+            phasePlotCtx.beginPath();
+            phasePlotCtx.moveTo(0, 50);
+            phasePlotCtx.lineTo(400, 50);
+            phasePlotCtx.stroke();
+            phasePlotCtx.beginPath();
+            phasePlotCtx.moveTo(0, 250);
+            phasePlotCtx.lineTo(400, 250);
+            phasePlotCtx.stroke();
+            
+            phasePlotCtx.fillStyle = '#88ccff';
+            phasePlotCtx.font = '11px sans-serif';
+            phasePlotCtx.fillText('φ = kx - ωt', 10, 20);
+            phasePlotCtx.fillText('2π', 10, 55);
+            phasePlotCtx.fillText('0', 10, 155);
+            phasePlotCtx.fillText('Position →', 320, 290);
         }
 
         function animate() {
