@@ -53,8 +53,8 @@
             pointer-events: none; z-index: 1;
         }
         .tooltip {
-            position: absolute; right: 220px; top: 0;
-            width: 280px; padding: 15px;
+            position: fixed; right: calc(20px + 3 * 200px + 2 * 15px + 20px);
+            width: 300px; padding: 15px;
             background: rgba(10, 10, 30, 0.95); backdrop-filter: blur(20px);
             border: 1px solid rgba(100, 200, 255, 0.4);
             border-radius: 10px;
@@ -62,7 +62,9 @@
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
             opacity: 0; pointer-events: none;
             transition: opacity 0.3s ease;
-            z-index: 100;
+            z-index: 1000;
+            max-height: 400px;
+            overflow-y: auto;
         }
         .tooltip strong {
             color: #88ccff; display: block; margin-bottom: 8px;
@@ -287,6 +289,15 @@
             husimiCtx = husimiCanvas.getContext('2d');
             envelopeCtx = envelopeCanvas.getContext('2d');
             phasePlotCtx = phasePlotCanvas.getContext('2d');
+            
+            // Setup tooltip positioning
+            document.querySelectorAll('.projection-view').forEach(view => {
+                const tooltip = view.querySelector('.tooltip');
+                view.addEventListener('mouseenter', () => {
+                    const rect = view.getBoundingClientRect();
+                    tooltip.style.top = rect.top + 'px';
+                });
+            });
             
             // Initialize spacetime history buffer
             spacetimeHistory = [];
