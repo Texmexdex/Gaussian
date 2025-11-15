@@ -53,17 +53,17 @@
             pointer-events: none; z-index: 1;
         }
         .tooltip {
-            position: fixed; right: calc(20px + 3 * 200px + 2 * 15px + 20px);
-            width: 300px; padding: 15px;
-            background: rgba(10, 10, 30, 0.95); backdrop-filter: blur(20px);
-            border: 1px solid rgba(100, 200, 255, 0.4);
+            position: fixed;
+            width: 320px; padding: 15px;
+            background: rgba(10, 10, 30, 0.98); backdrop-filter: blur(20px);
+            border: 2px solid rgba(100, 200, 255, 0.5);
             border-radius: 10px;
             font-size: 12px; line-height: 1.6; color: #aabbcc;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.9);
             opacity: 0; pointer-events: none;
             transition: opacity 0.3s ease;
-            z-index: 1000;
-            max-height: 400px;
+            z-index: 10000;
+            max-height: 300px;
             overflow-y: auto;
         }
         .tooltip strong {
@@ -295,6 +295,11 @@
                 const tooltip = view.querySelector('.tooltip');
                 view.addEventListener('mouseenter', () => {
                     const rect = view.getBoundingClientRect();
+                    const tooltipWidth = 320;
+                    const spacing = 20;
+                    
+                    // Position to the left of the projection grid
+                    tooltip.style.right = (window.innerWidth - rect.left + spacing) + 'px';
                     tooltip.style.top = rect.top + 'px';
                 });
             });
