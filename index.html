@@ -54,19 +54,23 @@
         }
         .tooltip {
             position: absolute;
-            bottom: 160px;
+            top: 0;
             left: 0;
-            width: 200px; padding: 12px;
+            width: 100%; 
+            height: 100%;
+            padding: 12px;
             background: rgba(10, 10, 30, 0.98); backdrop-filter: blur(20px);
-            border: 2px solid rgba(100, 200, 255, 0.5);
+            border: 2px solid rgba(100, 200, 255, 0.6);
             border-radius: 10px;
-            font-size: 11px; line-height: 1.5; color: #aabbcc;
+            font-size: 11px; line-height: 1.4; color: #aabbcc;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.9);
             opacity: 0; pointer-events: none;
             transition: opacity 0.3s ease;
             z-index: 10000;
-            max-height: 200px;
             overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
         }
         .tooltip strong {
             color: #88ccff; display: block; margin-bottom: 8px;
